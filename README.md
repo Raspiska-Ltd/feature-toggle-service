@@ -34,6 +34,11 @@ A centralized feature toggle management system with SQLite persistence and Redis
 - **Safe Defaults**: Configurable fallback behavior per feature
 - **Spring Boot Client**: Auto-configured client library with annotations
 - **HTML Management UI**: Built-in web interface for toggle management
+- **Toggle Groups**: Organize toggles by group for visual management
+- **Scheduled Toggles**: Schedule automatic status changes at specific times
+- **Audit Logging**: Track all changes with optional actor identification
+- **Prometheus Metrics**: Monitor toggle checks, cache hits/misses
+- **Health Checks**: Redis and database health via Spring Actuator
 
 ## Toggle Statuses
 
@@ -135,6 +140,27 @@ Features:
 | POST | `/api/v1/toggles/{name}/blacklist` | Add users to blacklist |
 | DELETE | `/api/v1/toggles/{name}/blacklist` | Remove users from blacklist |
 
+### Scheduled Toggles
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| POST | `/api/v1/toggles/{name}/schedule` | Schedule status change |
+| DELETE | `/api/v1/toggles/{name}/schedule` | Cancel scheduled change |
+
+### Audit Logs
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/api/v1/audit?featureName={name}&actor={actor}` | Query audit logs |
+
+### Monitoring
+
+| Method | Endpoint | Description |
+|--------|----------|-------------|
+| GET | `/actuator/health` | Health check (Redis, DB) |
+| GET | `/actuator/prometheus` | Prometheus metrics |
+| GET | `/actuator/metrics` | Spring metrics |
+
 ## API Examples
 
 ### Create a Toggle
@@ -142,10 +168,12 @@ Features:
 ```bash
 curl -X POST http://localhost:8090/api/v1/toggles \
   -H "Content-Type: application/json" \
+  -H "X-Actor: admin@example.com" \
   -d '{
     "featureName": "WITHDRAW",
     "status": "ENABLED",
-    "description": "Global withdraw feature"
+    "description": "Global withdraw feature",
+    "groupName": "payment"
   }'
 ```
 
@@ -181,6 +209,30 @@ curl -X POST http://localhost:8090/api/v1/toggles/WITHDRAW/whitelist \
 
 ```bash
 curl "http://localhost:8090/api/v1/toggles/WITHDRAW/check?userId=user-123"
+```
+
+### Schedule a Toggle Change
+
+```bash
+curl -X POST http://localhost:8090/api/v1/toggles/WITHDRAW/schedule \
+  -H "Content-Type: application/json" \
+  -H "X-Actor: admin@example.com" \
+  -d '{
+    "scheduledStatus": "DISABLED",
+    "scheduledAt": "2026-02-01T00:00:00Z"
+  }'
+```
+
+### Filter by Group
+
+```bash
+curl "http://localhost:8090/api/v1/toggles?group=payment"
+```
+
+### View Audit Logs
+
+```bash
+curl "http://localhost:8090/api/v1/audit?featureName=WITHDRAW"
 ```
 
 ---
@@ -404,6 +456,24 @@ feature-toggle-service/
 # View coverage report
 open build/reports/jacoco/test/html/index.html
 ```
+
+## Performance Testing
+
+Run load tests to benchmark the service:
+
+```bash
+# Run performance tests
+./gradlew performanceTest
+
+# View performance report
+cat build/reports/performance/load-test-report.md
+```
+
+Performance tests include:
+- Feature creation throughput
+- Concurrent reads while writing
+- Feature check latency (P95, P99)
+- Delete operations
 
 ## License
 
