@@ -1,0 +1,616 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Feature Toggle Management</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+    <style>
+        .modal { display: none; }
+        .modal.active { display: flex; }
+        .status-enabled { background-color: #10b981; }
+        .status-disabled { background-color: #ef4444; }
+        .status-list_mode { background-color: #f59e0b; }
+    </style>
+</head>
+<body class="bg-gray-900 text-gray-100 min-h-screen">
+    <div class="container mx-auto px-4 py-8 max-w-6xl">
+        <!-- Header -->
+        <div class="flex justify-between items-center mb-8">
+            <div>
+                <h1 class="text-3xl font-bold text-white">
+                    <i class="fas fa-toggle-on text-emerald-500 mr-3"></i>
+                    Feature Toggle Management
+                </h1>
+                <p class="text-gray-400 mt-1">Manage feature flags across your microservices</p>
+            </div>
+            <button onclick="openCreateModal()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg flex items-center gap-2 transition">
+                <i class="fas fa-plus"></i>
+                New Toggle
+            </button>
+        </div>
+
+        <!-- Stats -->
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-4 mb-8">
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-gray-400 text-sm">Total Toggles</div>
+                <div id="stat-total" class="text-2xl font-bold text-white">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-gray-400 text-sm">Enabled</div>
+                <div id="stat-enabled" class="text-2xl font-bold text-emerald-500">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-gray-400 text-sm">Disabled</div>
+                <div id="stat-disabled" class="text-2xl font-bold text-red-500">0</div>
+            </div>
+            <div class="bg-gray-800 rounded-lg p-4 border border-gray-700">
+                <div class="text-gray-400 text-sm">List Mode</div>
+                <div id="stat-list" class="text-2xl font-bold text-amber-500">0</div>
+            </div>
+        </div>
+
+        <!-- Search -->
+        <div class="mb-6">
+            <div class="relative">
+                <i class="fas fa-search absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-500"></i>
+                <input type="text" id="search" placeholder="Search toggles..." 
+                    class="w-full bg-gray-800 border border-gray-700 rounded-lg pl-10 pr-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+        </div>
+
+        <!-- Toggle List -->
+        <div id="toggle-list" class="space-y-3">
+            <!-- Toggles will be rendered here -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden text-center py-16">
+            <i class="fas fa-toggle-off text-6xl text-gray-600 mb-4"></i>
+            <h3 class="text-xl text-gray-400">No feature toggles yet</h3>
+            <p class="text-gray-500 mt-2">Create your first toggle to get started</p>
+        </div>
+
+        <!-- Loading -->
+        <div id="loading" class="text-center py-16">
+            <i class="fas fa-spinner fa-spin text-4xl text-emerald-500"></i>
+        </div>
+    </div>
+
+    <!-- Create/Edit Modal -->
+    <div id="toggle-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4 border border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 id="modal-title" class="text-xl font-bold text-white">Create Toggle</h2>
+                <button onclick="closeModal()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            <form id="toggle-form" onsubmit="saveToggle(event)">
+                <input type="hidden" id="edit-mode" value="create">
+                <input type="hidden" id="original-name" value="">
+                
+                <div class="mb-4">
+                    <label class="block text-gray-400 text-sm mb-2">Feature Name</label>
+                    <input type="text" id="feature-name" required pattern="^[A-Z][A-Z0-9_]*$"
+                        placeholder="e.g., WITHDRAW, WITHDRAW_BANK_X"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+                    <p class="text-gray-500 text-xs mt-1">Uppercase letters, numbers, and underscores only</p>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block text-gray-400 text-sm mb-2">Status</label>
+                    <select id="feature-status" required
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+                        <option value="ENABLED">Enabled - Feature on for everyone</option>
+                        <option value="DISABLED">Disabled - Feature off for everyone</option>
+                        <option value="LIST_MODE">List Mode - Check whitelist/blacklist</option>
+                    </select>
+                </div>
+
+                <div class="mb-6">
+                    <label class="block text-gray-400 text-sm mb-2">Description (optional)</label>
+                    <textarea id="feature-description" rows="2"
+                        placeholder="What does this toggle control?"
+                        class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500"></textarea>
+                </div>
+
+                <div class="flex gap-3">
+                    <button type="button" onclick="closeModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg transition">
+                        Cancel
+                    </button>
+                    <button type="submit" class="flex-1 bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg transition">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- User List Modal -->
+    <div id="users-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-2xl mx-4 border border-gray-700 max-h-[90vh] overflow-hidden flex flex-col">
+            <div class="flex justify-between items-center mb-4">
+                <h2 id="users-modal-title" class="text-xl font-bold text-white">Manage Users</h2>
+                <button onclick="closeUsersModal()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <input type="hidden" id="users-feature-name" value="">
+            
+            <!-- Tabs -->
+            <div class="flex gap-2 mb-4">
+                <button id="tab-whitelist" onclick="switchTab('whitelist')" class="px-4 py-2 rounded-lg bg-emerald-600 text-white">
+                    <i class="fas fa-check mr-2"></i>Whitelist (<span id="whitelist-count">0</span>)
+                </button>
+                <button id="tab-blacklist" onclick="switchTab('blacklist')" class="px-4 py-2 rounded-lg bg-gray-700 text-gray-300">
+                    <i class="fas fa-ban mr-2"></i>Blacklist (<span id="blacklist-count">0</span>)
+                </button>
+            </div>
+
+            <!-- Add Users -->
+            <div class="flex gap-2 mb-4">
+                <input type="text" id="add-user-ids" placeholder="Enter user IDs (comma separated)"
+                    class="flex-1 bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+                <button onclick="addUsers()" class="bg-emerald-600 hover:bg-emerald-700 text-white px-4 py-2 rounded-lg transition">
+                    <i class="fas fa-plus mr-2"></i>Add
+                </button>
+            </div>
+
+            <!-- User List -->
+            <div class="flex-1 overflow-y-auto">
+                <div id="users-list" class="space-y-2">
+                    <!-- Users will be rendered here -->
+                </div>
+                <div id="users-empty" class="hidden text-center py-8 text-gray-500">
+                    <i class="fas fa-users text-4xl mb-2"></i>
+                    <p>No users in this list</p>
+                </div>
+                <div id="users-loading" class="text-center py-8">
+                    <i class="fas fa-spinner fa-spin text-2xl text-emerald-500"></i>
+                </div>
+            </div>
+
+            <!-- Pagination -->
+            <div id="users-pagination" class="flex justify-between items-center mt-4 pt-4 border-t border-gray-700">
+                <button onclick="prevPage()" id="prev-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50" disabled>
+                    <i class="fas fa-chevron-left mr-2"></i>Previous
+                </button>
+                <span id="page-info" class="text-gray-400">Page 1</span>
+                <button onclick="nextPage()" id="next-btn" class="bg-gray-700 hover:bg-gray-600 text-white px-4 py-2 rounded-lg transition disabled:opacity-50" disabled>
+                    Next<i class="fas fa-chevron-right ml-2"></i>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Check Feature Modal -->
+    <div id="check-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-md mx-4 border border-gray-700">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-xl font-bold text-white">Check Feature</h2>
+                <button onclick="closeCheckModal()" class="text-gray-400 hover:text-white">
+                    <i class="fas fa-times text-xl"></i>
+                </button>
+            </div>
+            
+            <input type="hidden" id="check-feature-name" value="">
+            
+            <div class="mb-4">
+                <label class="block text-gray-400 text-sm mb-2">User ID (optional)</label>
+                <input type="text" id="check-user-id" placeholder="Enter user ID to check"
+                    class="w-full bg-gray-700 border border-gray-600 rounded-lg px-4 py-2 text-white focus:outline-none focus:border-emerald-500">
+            </div>
+
+            <button onclick="checkFeature()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white py-2 rounded-lg transition mb-4">
+                <i class="fas fa-search mr-2"></i>Check
+            </button>
+
+            <div id="check-result" class="hidden">
+                <div id="check-result-content" class="bg-gray-700 rounded-lg p-4">
+                    <!-- Result will be shown here -->
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Delete Confirmation Modal -->
+    <div id="delete-modal" class="modal fixed inset-0 bg-black bg-opacity-50 items-center justify-center z-50">
+        <div class="bg-gray-800 rounded-xl p-6 w-full max-w-sm mx-4 border border-gray-700">
+            <div class="text-center mb-6">
+                <i class="fas fa-exclamation-triangle text-5xl text-red-500 mb-4"></i>
+                <h2 class="text-xl font-bold text-white mb-2">Delete Toggle?</h2>
+                <p class="text-gray-400">Are you sure you want to delete <span id="delete-name" class="text-white font-semibold"></span>?</p>
+                <p class="text-gray-500 text-sm mt-2">This action cannot be undone.</p>
+            </div>
+            <div class="flex gap-3">
+                <button onclick="closeDeleteModal()" class="flex-1 bg-gray-700 hover:bg-gray-600 text-white py-2 rounded-lg transition">
+                    Cancel
+                </button>
+                <button onclick="confirmDelete()" class="flex-1 bg-red-600 hover:bg-red-700 text-white py-2 rounded-lg transition">
+                    Delete
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast -->
+    <div id="toast" class="fixed bottom-4 right-4 bg-gray-800 border border-gray-700 rounded-lg px-4 py-3 shadow-lg transform translate-y-20 opacity-0 transition-all duration-300">
+        <div class="flex items-center gap-3">
+            <i id="toast-icon" class="fas fa-check-circle text-emerald-500"></i>
+            <span id="toast-message" class="text-white"></span>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/v1/toggles';
+        let toggles = [];
+        let currentTab = 'whitelist';
+        let currentPage = 0;
+        let deleteTarget = null;
+
+        // Initialize
+        document.addEventListener('DOMContentLoaded', () => {
+            loadToggles();
+            document.getElementById('search').addEventListener('input', filterToggles);
+        });
+
+        // Load all toggles
+        async function loadToggles() {
+            document.getElementById('loading').classList.remove('hidden');
+            document.getElementById('toggle-list').innerHTML = '';
+            
+            try {
+                const response = await fetch(API_BASE);
+                toggles = await response.json();
+                renderToggles(toggles);
+                updateStats();
+            } catch (error) {
+                showToast('Failed to load toggles', 'error');
+            } finally {
+                document.getElementById('loading').classList.add('hidden');
+            }
+        }
+
+        // Render toggles
+        function renderToggles(list) {
+            const container = document.getElementById('toggle-list');
+            const emptyState = document.getElementById('empty-state');
+            
+            if (list.length === 0) {
+                container.innerHTML = '';
+                emptyState.classList.remove('hidden');
+                return;
+            }
+            
+            emptyState.classList.add('hidden');
+            container.innerHTML = list.map(toggle => `
+                <div class="bg-gray-800 rounded-lg p-4 border border-gray-700 hover:border-gray-600 transition">
+                    <div class="flex items-center justify-between">
+                        <div class="flex items-center gap-4">
+                            <span class="status-${toggle.status.toLowerCase()} text-white text-xs font-semibold px-3 py-1 rounded-full">
+                                ${toggle.status}
+                            </span>
+                            <div>
+                                <h3 class="text-white font-semibold">${toggle.featureName}</h3>
+                                <p class="text-gray-500 text-sm">${toggle.description || 'No description'}</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                            ${toggle.status === 'LIST_MODE' ? `
+                                <span class="text-gray-500 text-sm mr-2">
+                                    <i class="fas fa-check text-emerald-500"></i> ${toggle.whitelistCount || 0}
+                                    <i class="fas fa-ban text-red-500 ml-2"></i> ${toggle.blacklistCount || 0}
+                                </span>
+                            ` : ''}
+                            <button onclick="openCheckModal('${toggle.featureName}')" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition" title="Check">
+                                <i class="fas fa-search"></i>
+                            </button>
+                            ${toggle.status === 'LIST_MODE' ? `
+                                <button onclick="openUsersModal('${toggle.featureName}')" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition" title="Manage Users">
+                                    <i class="fas fa-users"></i>
+                                </button>
+                            ` : ''}
+                            <button onclick="openEditModal('${toggle.featureName}')" class="bg-gray-700 hover:bg-gray-600 text-white p-2 rounded-lg transition" title="Edit">
+                                <i class="fas fa-edit"></i>
+                            </button>
+                            <button onclick="openDeleteModal('${toggle.featureName}')" class="bg-gray-700 hover:bg-red-600 text-white p-2 rounded-lg transition" title="Delete">
+                                <i class="fas fa-trash"></i>
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `).join('');
+        }
+
+        // Update stats
+        function updateStats() {
+            document.getElementById('stat-total').textContent = toggles.length;
+            document.getElementById('stat-enabled').textContent = toggles.filter(t => t.status === 'ENABLED').length;
+            document.getElementById('stat-disabled').textContent = toggles.filter(t => t.status === 'DISABLED').length;
+            document.getElementById('stat-list').textContent = toggles.filter(t => t.status === 'LIST_MODE').length;
+        }
+
+        // Filter toggles
+        function filterToggles() {
+            const search = document.getElementById('search').value.toLowerCase();
+            const filtered = toggles.filter(t => 
+                t.featureName.toLowerCase().includes(search) || 
+                (t.description && t.description.toLowerCase().includes(search))
+            );
+            renderToggles(filtered);
+        }
+
+        // Create Modal
+        function openCreateModal() {
+            document.getElementById('modal-title').textContent = 'Create Toggle';
+            document.getElementById('edit-mode').value = 'create';
+            document.getElementById('original-name').value = '';
+            document.getElementById('feature-name').value = '';
+            document.getElementById('feature-name').disabled = false;
+            document.getElementById('feature-status').value = 'ENABLED';
+            document.getElementById('feature-description').value = '';
+            document.getElementById('toggle-modal').classList.add('active');
+        }
+
+        // Edit Modal
+        function openEditModal(name) {
+            const toggle = toggles.find(t => t.featureName === name);
+            if (!toggle) return;
+            
+            document.getElementById('modal-title').textContent = 'Edit Toggle';
+            document.getElementById('edit-mode').value = 'edit';
+            document.getElementById('original-name').value = name;
+            document.getElementById('feature-name').value = toggle.featureName;
+            document.getElementById('feature-name').disabled = true;
+            document.getElementById('feature-status').value = toggle.status;
+            document.getElementById('feature-description').value = toggle.description || '';
+            document.getElementById('toggle-modal').classList.add('active');
+        }
+
+        function closeModal() {
+            document.getElementById('toggle-modal').classList.remove('active');
+        }
+
+        // Save Toggle
+        async function saveToggle(event) {
+            event.preventDefault();
+            
+            const isEdit = document.getElementById('edit-mode').value === 'edit';
+            const name = isEdit ? document.getElementById('original-name').value : document.getElementById('feature-name').value;
+            const status = document.getElementById('feature-status').value;
+            const description = document.getElementById('feature-description').value;
+
+            try {
+                if (isEdit) {
+                    await fetch(`${API_BASE}/${name}`, {
+                        method: 'PUT',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ status, description })
+                    });
+                    showToast('Toggle updated successfully');
+                } else {
+                    const response = await fetch(API_BASE, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ featureName: name, status, description })
+                    });
+                    if (!response.ok) {
+                        const error = await response.json();
+                        throw new Error(error.message || 'Failed to create toggle');
+                    }
+                    showToast('Toggle created successfully');
+                }
+                closeModal();
+                loadToggles();
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+
+        // Delete Modal
+        function openDeleteModal(name) {
+            deleteTarget = name;
+            document.getElementById('delete-name').textContent = name;
+            document.getElementById('delete-modal').classList.add('active');
+        }
+
+        function closeDeleteModal() {
+            document.getElementById('delete-modal').classList.remove('active');
+            deleteTarget = null;
+        }
+
+        async function confirmDelete() {
+            if (!deleteTarget) return;
+            
+            try {
+                await fetch(`${API_BASE}/${deleteTarget}`, { method: 'DELETE' });
+                showToast('Toggle deleted successfully');
+                closeDeleteModal();
+                loadToggles();
+            } catch (error) {
+                showToast('Failed to delete toggle', 'error');
+            }
+        }
+
+        // Users Modal
+        async function openUsersModal(name) {
+            document.getElementById('users-feature-name').value = name;
+            document.getElementById('users-modal-title').textContent = `Manage Users - ${name}`;
+            document.getElementById('users-modal').classList.add('active');
+            currentPage = 0;
+            currentTab = 'whitelist';
+            switchTab('whitelist');
+        }
+
+        function closeUsersModal() {
+            document.getElementById('users-modal').classList.remove('active');
+        }
+
+        function switchTab(tab) {
+            currentTab = tab;
+            currentPage = 0;
+            
+            document.getElementById('tab-whitelist').className = tab === 'whitelist' 
+                ? 'px-4 py-2 rounded-lg bg-emerald-600 text-white'
+                : 'px-4 py-2 rounded-lg bg-gray-700 text-gray-300';
+            document.getElementById('tab-blacklist').className = tab === 'blacklist'
+                ? 'px-4 py-2 rounded-lg bg-red-600 text-white'
+                : 'px-4 py-2 rounded-lg bg-gray-700 text-gray-300';
+            
+            loadUsers();
+        }
+
+        async function loadUsers() {
+            const name = document.getElementById('users-feature-name').value;
+            document.getElementById('users-loading').classList.remove('hidden');
+            document.getElementById('users-list').innerHTML = '';
+            document.getElementById('users-empty').classList.add('hidden');
+
+            try {
+                const response = await fetch(`${API_BASE}/${name}/${currentTab}?page=${currentPage}&size=20`);
+                const data = await response.json();
+                
+                document.getElementById(`${currentTab}-count`).textContent = data.totalElements || 0;
+                
+                if (data.content && data.content.length > 0) {
+                    document.getElementById('users-list').innerHTML = data.content.map(userId => `
+                        <div class="flex items-center justify-between bg-gray-700 rounded-lg px-4 py-2">
+                            <span class="text-white">${userId}</span>
+                            <button onclick="removeUser('${userId}')" class="text-red-400 hover:text-red-300 transition">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                    `).join('');
+                } else {
+                    document.getElementById('users-empty').classList.remove('hidden');
+                }
+
+                // Update pagination
+                document.getElementById('prev-btn').disabled = data.first;
+                document.getElementById('next-btn').disabled = data.last;
+                document.getElementById('page-info').textContent = `Page ${currentPage + 1} of ${data.totalPages || 1}`;
+            } catch (error) {
+                showToast('Failed to load users', 'error');
+            } finally {
+                document.getElementById('users-loading').classList.add('hidden');
+            }
+        }
+
+        async function addUsers() {
+            const name = document.getElementById('users-feature-name').value;
+            const input = document.getElementById('add-user-ids').value;
+            const userIds = input.split(',').map(id => id.trim()).filter(id => id);
+            
+            if (userIds.length === 0) {
+                showToast('Please enter at least one user ID', 'error');
+                return;
+            }
+
+            try {
+                await fetch(`${API_BASE}/${name}/${currentTab}`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userIds })
+                });
+                document.getElementById('add-user-ids').value = '';
+                showToast(`Added ${userIds.length} user(s) to ${currentTab}`);
+                loadUsers();
+                loadToggles();
+            } catch (error) {
+                showToast('Failed to add users', 'error');
+            }
+        }
+
+        async function removeUser(userId) {
+            const name = document.getElementById('users-feature-name').value;
+            
+            try {
+                await fetch(`${API_BASE}/${name}/${currentTab}`, {
+                    method: 'DELETE',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ userIds: [userId] })
+                });
+                showToast('User removed');
+                loadUsers();
+                loadToggles();
+            } catch (error) {
+                showToast('Failed to remove user', 'error');
+            }
+        }
+
+        function prevPage() {
+            if (currentPage > 0) {
+                currentPage--;
+                loadUsers();
+            }
+        }
+
+        function nextPage() {
+            currentPage++;
+            loadUsers();
+        }
+
+        // Check Feature Modal
+        function openCheckModal(name) {
+            document.getElementById('check-feature-name').value = name;
+            document.getElementById('check-user-id').value = '';
+            document.getElementById('check-result').classList.add('hidden');
+            document.getElementById('check-modal').classList.add('active');
+        }
+
+        function closeCheckModal() {
+            document.getElementById('check-modal').classList.remove('active');
+        }
+
+        async function checkFeature() {
+            const name = document.getElementById('check-feature-name').value;
+            const userId = document.getElementById('check-user-id').value;
+            
+            try {
+                const url = userId ? `${API_BASE}/${name}/check?userId=${userId}` : `${API_BASE}/${name}/check`;
+                const response = await fetch(url);
+                const result = await response.json();
+                
+                const resultDiv = document.getElementById('check-result-content');
+                resultDiv.innerHTML = `
+                    <div class="flex items-center gap-3 mb-3">
+                        <i class="fas ${result.enabled ? 'fa-check-circle text-emerald-500' : 'fa-times-circle text-red-500'} text-2xl"></i>
+                        <span class="text-xl font-semibold ${result.enabled ? 'text-emerald-500' : 'text-red-500'}">
+                            ${result.enabled ? 'ENABLED' : 'DISABLED'}
+                        </span>
+                    </div>
+                    <div class="space-y-2 text-sm">
+                        <div><span class="text-gray-400">Feature:</span> <span class="text-white">${result.featureName}</span></div>
+                        <div><span class="text-gray-400">Status:</span> <span class="text-white">${result.status || 'N/A'}</span></div>
+                        <div><span class="text-gray-400">Reason:</span> <span class="text-white">${result.reason || 'N/A'}</span></div>
+                    </div>
+                `;
+                document.getElementById('check-result').classList.remove('hidden');
+            } catch (error) {
+                showToast('Failed to check feature', 'error');
+            }
+        }
+
+        // Toast
+        function showToast(message, type = 'success') {
+            const toast = document.getElementById('toast');
+            const icon = document.getElementById('toast-icon');
+            const msg = document.getElementById('toast-message');
+            
+            msg.textContent = message;
+            icon.className = type === 'success' 
+                ? 'fas fa-check-circle text-emerald-500'
+                : 'fas fa-exclamation-circle text-red-500';
+            
+            toast.classList.remove('translate-y-20', 'opacity-0');
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-20', 'opacity-0');
+            }, 3000);
+        }
+    </script>
+</body>
+</html>

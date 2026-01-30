@@ -1,0 +1,282 @@
+package io.raspiska.featuretoggle.controller;
+
+import com.fasterxml.jackson.databind.ObjectMapper;
+import io.raspiska.featuretoggle.dto.*;
+import io.raspiska.featuretoggle.entity.ToggleStatus;
+import io.raspiska.featuretoggle.service.FeatureToggleService;
+import jakarta.persistence.EntityNotFoundException;
+import org.junit.jupiter.api.DisplayName;
+import org.junit.jupiter.api.Test;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.autoconfigure.web.servlet.WebMvcTest;
+import org.springframework.boot.test.mock.mockito.MockBean;
+import org.springframework.data.domain.PageImpl;
+import org.springframework.data.domain.PageRequest;
+import org.springframework.http.MediaType;
+import org.springframework.test.web.servlet.MockMvc;
+
+import java.time.Instant;
+import java.util.List;
+
+import static org.mockito.ArgumentMatchers.*;
+import static org.mockito.Mockito.*;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.*;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.*;
+
+@WebMvcTest(FeatureToggleController.class)
+class FeatureToggleControllerTest {
+
+    @Autowired
+    private MockMvc mockMvc;
+
+    @Autowired
+    private ObjectMapper objectMapper;
+
+    @MockBean
+    private FeatureToggleService toggleService;
+
+    @Test
+    @DisplayName("GET /api/v1/toggles should return all toggles")
+    void getAllToggles_shouldReturnAllToggles() throws Exception {
+        // Given
+        FeatureToggleDto toggle1 = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("FEATURE_1")
+                .status(ToggleStatus.ENABLED)
+                .build();
+        FeatureToggleDto toggle2 = FeatureToggleDto.builder()
+                .id(2L)
+                .featureName("FEATURE_2")
+                .status(ToggleStatus.DISABLED)
+                .build();
+        when(toggleService.getAllToggles()).thenReturn(List.of(toggle1, toggle2));
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].featureName").value("FEATURE_1"))
+                .andExpect(jsonPath("$[1].featureName").value("FEATURE_2"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles/{name} should return toggle")
+    void getToggle_shouldReturnToggle() throws Exception {
+        // Given
+        FeatureToggleDto toggle = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("TEST_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .description("Test")
+                .whitelistCount(5L)
+                .blacklistCount(2L)
+                .createdAt(Instant.now())
+                .build();
+        when(toggleService.getToggle("TEST_FEATURE")).thenReturn(toggle);
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles/TEST_FEATURE"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.featureName").value("TEST_FEATURE"))
+                .andExpect(jsonPath("$.status").value("ENABLED"))
+                .andExpect(jsonPath("$.whitelistCount").value(5));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles should create toggle")
+    void createToggle_shouldCreateToggle() throws Exception {
+        // Given
+        CreateFeatureToggleRequest request = new CreateFeatureToggleRequest();
+        request.setFeatureName("NEW_FEATURE");
+        request.setStatus(ToggleStatus.ENABLED);
+        request.setDescription("New feature");
+
+        FeatureToggleDto created = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("NEW_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .description("New feature")
+                .build();
+        when(toggleService.createToggle(any())).thenReturn(created);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.featureName").value("NEW_FEATURE"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/v1/toggles/{name} should update toggle")
+    void updateToggle_shouldUpdateToggle() throws Exception {
+        // Given
+        UpdateFeatureToggleRequest request = new UpdateFeatureToggleRequest();
+        request.setStatus(ToggleStatus.DISABLED);
+
+        FeatureToggleDto updated = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("TEST_FEATURE")
+                .status(ToggleStatus.DISABLED)
+                .build();
+        when(toggleService.updateToggle(eq("TEST_FEATURE"), any())).thenReturn(updated);
+
+        // When/Then
+        mockMvc.perform(put("/api/v1/toggles/TEST_FEATURE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("DISABLED"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/toggles/{name} should delete toggle")
+    void deleteToggle_shouldDeleteToggle() throws Exception {
+        // Given
+        doNothing().when(toggleService).deleteToggle("TEST_FEATURE");
+
+        // When/Then
+        mockMvc.perform(delete("/api/v1/toggles/TEST_FEATURE"))
+                .andExpect(status().isNoContent());
+
+        verify(toggleService).deleteToggle("TEST_FEATURE");
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles/{name}/check should check feature")
+    void checkFeature_shouldCheckFeature() throws Exception {
+        // Given
+        FeatureCheckResponse response = FeatureCheckResponse.builder()
+                .featureName("TEST_FEATURE")
+                .enabled(true)
+                .status(ToggleStatus.ENABLED)
+                .reason("Feature is enabled globally")
+                .build();
+        when(toggleService.checkFeature("TEST_FEATURE", "user1")).thenReturn(response);
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles/TEST_FEATURE/check")
+                        .param("userId", "user1"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true))
+                .andExpect(jsonPath("$.reason").value("Feature is enabled globally"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles/{name}/check without userId should work")
+    void checkFeature_withoutUserId_shouldWork() throws Exception {
+        // Given
+        FeatureCheckResponse response = FeatureCheckResponse.builder()
+                .featureName("TEST_FEATURE")
+                .enabled(true)
+                .status(ToggleStatus.ENABLED)
+                .reason("Feature is enabled globally")
+                .build();
+        when(toggleService.checkFeature("TEST_FEATURE", null)).thenReturn(response);
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles/TEST_FEATURE/check"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.enabled").value(true));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles/{name}/whitelist should add users")
+    void addToWhitelist_shouldAddUsers() throws Exception {
+        // Given
+        UserListRequest request = new UserListRequest();
+        request.setUserIds(List.of("user1", "user2"));
+
+        doNothing().when(toggleService).addUsersToWhitelist(eq("TEST_FEATURE"), anyList());
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/whitelist")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(toggleService).addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles/{name}/whitelist/remove should remove users")
+    void removeFromWhitelist_shouldRemoveUsers() throws Exception {
+        // Given
+        UserListRequest request = new UserListRequest();
+        request.setUserIds(List.of("user1"));
+
+        doNothing().when(toggleService).removeUsersFromWhitelist(eq("TEST_FEATURE"), anyList());
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/whitelist/remove")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(toggleService).removeUsersFromWhitelist("TEST_FEATURE", List.of("user1"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles/{name}/whitelist should return paginated users")
+    void getWhitelist_shouldReturnPaginatedUsers() throws Exception {
+        // Given
+        when(toggleService.getWhitelistedUsers(eq("TEST_FEATURE"), any()))
+                .thenReturn(new PageImpl<>(List.of("user1", "user2"), PageRequest.of(0, 20), 2));
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles/TEST_FEATURE/whitelist"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0]").value("user1"))
+                .andExpect(jsonPath("$.content[1]").value("user2"))
+                .andExpect(jsonPath("$.totalElements").value(2));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles/{name}/blacklist should add users")
+    void addToBlacklist_shouldAddUsers() throws Exception {
+        // Given
+        UserListRequest request = new UserListRequest();
+        request.setUserIds(List.of("blocked1"));
+
+        doNothing().when(toggleService).addUsersToBlacklist(eq("TEST_FEATURE"), anyList());
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/blacklist")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(toggleService).addUsersToBlacklist("TEST_FEATURE", List.of("blocked1"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles/{name}/blacklist/remove should remove users")
+    void removeFromBlacklist_shouldRemoveUsers() throws Exception {
+        // Given
+        UserListRequest request = new UserListRequest();
+        request.setUserIds(List.of("blocked1"));
+
+        doNothing().when(toggleService).removeUsersFromBlacklist(eq("TEST_FEATURE"), anyList());
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/blacklist/remove")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(toggleService).removeUsersFromBlacklist("TEST_FEATURE", List.of("blocked1"));
+    }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles/{name}/blacklist should return paginated users")
+    void getBlacklist_shouldReturnPaginatedUsers() throws Exception {
+        // Given
+        when(toggleService.getBlacklistedUsers(eq("TEST_FEATURE"), any()))
+                .thenReturn(new PageImpl<>(List.of("blocked1"), PageRequest.of(0, 20), 1));
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles/TEST_FEATURE/blacklist"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.content[0]").value("blocked1"))
+                .andExpect(jsonPath("$.totalElements").value(1));
+    }
+}

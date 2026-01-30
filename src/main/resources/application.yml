@@ -1,0 +1,46 @@
+server:
+  port: 8090
+
+spring:
+  application:
+    name: feature-toggle-service
+
+  datasource:
+    url: jdbc:sqlite:./data/feature-toggle.db
+    driver-class-name: org.sqlite.JDBC
+
+  jpa:
+    database-platform: org.hibernate.community.dialect.SQLiteDialect
+    hibernate:
+      ddl-auto: update
+    show-sql: false
+    properties:
+      hibernate:
+        format_sql: true
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+      password: ${REDIS_PASSWORD:}
+
+feature-toggle:
+  cache:
+    ttl-seconds: 30
+  redis:
+    enabled: ${REDIS_ENABLED:true}
+    channel: feature-toggle-updates
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: when_authorized
+
+logging:
+  level:
+    io.raspiska.featuretoggle: INFO
+    org.hibernate.SQL: WARN
