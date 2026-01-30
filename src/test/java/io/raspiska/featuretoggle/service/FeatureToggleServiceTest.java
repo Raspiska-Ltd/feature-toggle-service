@@ -224,6 +224,7 @@ class FeatureToggleServiceTest {
         service.addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"), "test-actor");
 
         // Then
+        @SuppressWarnings("unchecked")
         ArgumentCaptor<List<FeatureToggleUser>> captor = ArgumentCaptor.forClass(List.class);
         verify(userRepository).saveAll(captor.capture());
         assertThat(captor.getValue()).hasSize(1);
@@ -242,6 +243,7 @@ class FeatureToggleServiceTest {
         service.addUsersToBlacklist("TEST_FEATURE", List.of("user1"), "test-actor");
 
         // Then
+        @SuppressWarnings("unchecked")
         ArgumentCaptor<List<FeatureToggleUser>> captor = ArgumentCaptor.forClass(List.class);
         verify(userRepository).saveAll(captor.capture());
         assertThat(captor.getValue().get(0).getListType()).isEqualTo(ListType.BLACKLIST);
