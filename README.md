@@ -373,6 +373,7 @@ See [CLIENT_USAGE.md](CLIENT_USAGE.md) for complete Redis HA configuration optio
 | `REDIS_HOST` | `localhost` | Redis server host |
 | `REDIS_PORT` | `6379` | Redis server port |
 | `REDIS_PASSWORD` | `` | Redis password |
+| `REDIS_DATABASE` | `0` | Redis database number (0-15) |
 | `REDIS_ENABLED` | `true` | Enable/disable Redis |
 
 ## Project Structure
