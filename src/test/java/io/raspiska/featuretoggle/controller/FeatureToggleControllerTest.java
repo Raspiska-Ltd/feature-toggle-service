@@ -279,4 +279,157 @@ class FeatureToggleControllerTest {
                 .andExpect(jsonPath("$.content[0]").value("blocked1"))
                 .andExpect(jsonPath("$.totalElements").value(1));
     }
+
+    @Test
+    @DisplayName("GET /api/v1/toggles with group filter should return filtered toggles")
+    void getAllToggles_withGroupFilter_shouldReturnFilteredToggles() throws Exception {
+        // Given
+        FeatureToggleDto toggle = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("PAYMENT_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .groupName("payment")
+                .build();
+        when(toggleService.getTogglesByGroup("payment")).thenReturn(List.of(toggle));
+
+        // When/Then
+        mockMvc.perform(get("/api/v1/toggles").param("group", "payment"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[0].featureName").value("PAYMENT_FEATURE"))
+                .andExpect(jsonPath("$[0].groupName").value("payment"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles with groupName should create toggle with group")
+    void createToggle_withGroup_shouldCreateToggleWithGroup() throws Exception {
+        // Given
+        CreateFeatureToggleRequest request = new CreateFeatureToggleRequest();
+        request.setFeatureName("PAYMENT_WITHDRAW");
+        request.setStatus(ToggleStatus.ENABLED);
+        request.setGroupName("payment");
+
+        FeatureToggleDto created = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("PAYMENT_WITHDRAW")
+                .status(ToggleStatus.ENABLED)
+                .groupName("payment")
+                .build();
+        when(toggleService.createToggle(any(), any())).thenReturn(created);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.groupName").value("payment"));
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles/{name}/schedule should schedule toggle")
+    void scheduleToggle_shouldScheduleToggle() throws Exception {
+        // Given
+        ScheduleToggleRequest request = new ScheduleToggleRequest();
+        request.setScheduledStatus(ToggleStatus.DISABLED);
+        request.setScheduledAt(Instant.parse("2026-02-01T00:00:00Z"));
+
+        FeatureToggleDto scheduled = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("TEST_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .scheduledStatus(ToggleStatus.DISABLED)
+                .scheduledAt(Instant.parse("2026-02-01T00:00:00Z"))
+                .build();
+        when(toggleService.scheduleToggle(eq("TEST_FEATURE"), eq(ToggleStatus.DISABLED), any(), any()))
+                .thenReturn(scheduled);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/schedule")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduledStatus").value("DISABLED"))
+                .andExpect(jsonPath("$.scheduledAt").exists());
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/toggles/{name}/schedule should cancel schedule")
+    void cancelSchedule_shouldCancelSchedule() throws Exception {
+        // Given
+        FeatureToggleDto toggle = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("TEST_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .scheduledStatus(null)
+                .scheduledAt(null)
+                .build();
+        when(toggleService.cancelSchedule(eq("TEST_FEATURE"), any())).thenReturn(toggle);
+
+        // When/Then
+        mockMvc.perform(delete("/api/v1/toggles/TEST_FEATURE/schedule"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.scheduledStatus").doesNotExist());
+    }
+
+    @Test
+    @DisplayName("POST /api/v1/toggles with X-Actor header should pass actor to service")
+    void createToggle_withActorHeader_shouldPassActorToService() throws Exception {
+        // Given
+        CreateFeatureToggleRequest request = new CreateFeatureToggleRequest();
+        request.setFeatureName("NEW_FEATURE");
+        request.setStatus(ToggleStatus.ENABLED);
+
+        FeatureToggleDto created = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("NEW_FEATURE")
+                .status(ToggleStatus.ENABLED)
+                .build();
+        when(toggleService.createToggle(any(), eq("admin@example.com"))).thenReturn(created);
+
+        // When/Then
+        mockMvc.perform(post("/api/v1/toggles")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor", "admin@example.com")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isCreated());
+
+        verify(toggleService).createToggle(any(), eq("admin@example.com"));
+    }
+
+    @Test
+    @DisplayName("PUT /api/v1/toggles/{name} with X-Actor header should pass actor to service")
+    void updateToggle_withActorHeader_shouldPassActorToService() throws Exception {
+        // Given
+        UpdateFeatureToggleRequest request = new UpdateFeatureToggleRequest();
+        request.setStatus(ToggleStatus.DISABLED);
+
+        FeatureToggleDto updated = FeatureToggleDto.builder()
+                .id(1L)
+                .featureName("TEST_FEATURE")
+                .status(ToggleStatus.DISABLED)
+                .build();
+        when(toggleService.updateToggle(eq("TEST_FEATURE"), any(), eq("admin@example.com"))).thenReturn(updated);
+
+        // When/Then
+        mockMvc.perform(put("/api/v1/toggles/TEST_FEATURE")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .header("X-Actor", "admin@example.com")
+                        .content(objectMapper.writeValueAsString(request)))
+                .andExpect(status().isOk());
+
+        verify(toggleService).updateToggle(eq("TEST_FEATURE"), any(), eq("admin@example.com"));
+    }
+
+    @Test
+    @DisplayName("DELETE /api/v1/toggles/{name} with X-Actor header should pass actor to service")
+    void deleteToggle_withActorHeader_shouldPassActorToService() throws Exception {
+        // Given
+        doNothing().when(toggleService).deleteToggle(eq("TEST_FEATURE"), eq("admin@example.com"));
+
+        // When/Then
+        mockMvc.perform(delete("/api/v1/toggles/TEST_FEATURE")
+                        .header("X-Actor", "admin@example.com"))
+                .andExpect(status().isNoContent());
+
+        verify(toggleService).deleteToggle(eq("TEST_FEATURE"), eq("admin@example.com"));
+    }
 }
