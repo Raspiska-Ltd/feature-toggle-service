@@ -48,6 +48,9 @@ class FeatureToggleCacheServiceTest {
     @Mock
     private SetOperations<String, Object> setOperations;
 
+    @Mock
+    private MetricsService metricsService;
+
     private ApplicationProperties properties;
     private FeatureToggleCacheService cacheService;
 
@@ -59,12 +62,18 @@ class FeatureToggleCacheServiceTest {
         properties.setRedis(new ApplicationProperties.Redis());
         properties.getRedis().setChannel("test-channel");
 
+        lenient().when(metricsService.timeFeatureCheck(any())).thenAnswer(inv -> {
+            java.util.function.Supplier<?> supplier = inv.getArgument(0);
+            return supplier.get();
+        });
+
         cacheService = new FeatureToggleCacheService(
                 redisTemplate,
                 featureToggleTopic,
                 toggleRepository,
                 userRepository,
-                properties
+                properties,
+                metricsService
         );
     }
 

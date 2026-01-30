@@ -23,4 +23,6 @@ public class CreateFeatureToggleRequest {
     private ToggleStatus status;
 
     private String description;
+
+    private String groupName;
 }

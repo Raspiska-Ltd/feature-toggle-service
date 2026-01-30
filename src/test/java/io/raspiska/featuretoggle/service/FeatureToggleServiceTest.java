@@ -42,6 +42,9 @@ class FeatureToggleServiceTest {
     @Mock
     private FeatureToggleCacheService cacheService;
 
+    @Mock
+    private AuditLogService auditLogService;
+
     @InjectMocks
     private FeatureToggleService service;
 
@@ -129,7 +132,7 @@ class FeatureToggleServiceTest {
         when(userRepository.countByFeatureAndListType(any(), any())).thenReturn(0L);
 
         // When
-        FeatureToggleDto result = service.createToggle(request);
+        FeatureToggleDto result = service.createToggle(request, "test-actor");
 
         // Then
         assertThat(result.getFeatureName()).isEqualTo("NEW_FEATURE");
@@ -148,7 +151,7 @@ class FeatureToggleServiceTest {
         when(toggleRepository.existsByFeatureName("EXISTING")).thenReturn(true);
 
         // When/Then
-        assertThatThrownBy(() -> service.createToggle(request))
+        assertThatThrownBy(() -> service.createToggle(request, "test-actor"))
                 .isInstanceOf(IllegalArgumentException.class)
                 .hasMessageContaining("already exists");
     }
@@ -166,7 +169,7 @@ class FeatureToggleServiceTest {
         request.setDescription("Updated description");
 
         // When
-        FeatureToggleDto result = service.updateToggle("TEST_FEATURE", request);
+        FeatureToggleDto result = service.updateToggle("TEST_FEATURE", request, "test-actor");
 
         // Then
         assertThat(testToggle.getStatus()).isEqualTo(ToggleStatus.DISABLED);
@@ -188,7 +191,7 @@ class FeatureToggleServiceTest {
         request.setDescription(null);
 
         // When
-        service.updateToggle("TEST_FEATURE", request);
+        service.updateToggle("TEST_FEATURE", request, "test-actor");
 
         // Then
         assertThat(testToggle.getDescription()).isEqualTo("Original description");
@@ -201,7 +204,7 @@ class FeatureToggleServiceTest {
         when(toggleRepository.findByFeatureName("TEST_FEATURE")).thenReturn(Optional.of(testToggle));
 
         // When
-        service.deleteToggle("TEST_FEATURE");
+        service.deleteToggle("TEST_FEATURE", "test-actor");
 
         // Then
         verify(userRepository).deleteByFeature(testToggle);
@@ -218,7 +221,7 @@ class FeatureToggleServiceTest {
         when(userRepository.existsByFeatureAndUserIdAndListType(testToggle, "user2", ListType.WHITELIST)).thenReturn(true);
 
         // When
-        service.addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"));
+        service.addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"), "test-actor");
 
         // Then
         ArgumentCaptor<List<FeatureToggleUser>> captor = ArgumentCaptor.forClass(List.class);
@@ -236,7 +239,7 @@ class FeatureToggleServiceTest {
         when(userRepository.existsByFeatureAndUserIdAndListType(any(), anyString(), eq(ListType.BLACKLIST))).thenReturn(false);
 
         // When
-        service.addUsersToBlacklist("TEST_FEATURE", List.of("user1"));
+        service.addUsersToBlacklist("TEST_FEATURE", List.of("user1"), "test-actor");
 
         // Then
         ArgumentCaptor<List<FeatureToggleUser>> captor = ArgumentCaptor.forClass(List.class);
@@ -253,7 +256,7 @@ class FeatureToggleServiceTest {
         when(userRepository.deleteByFeatureAndUserIdInAndListType(testToggle, List.of("user1"), ListType.WHITELIST)).thenReturn(1);
 
         // When
-        service.removeUsersFromWhitelist("TEST_FEATURE", List.of("user1"));
+        service.removeUsersFromWhitelist("TEST_FEATURE", List.of("user1"), "test-actor");
 
         // Then
         verify(userRepository).deleteByFeatureAndUserIdInAndListType(testToggle, List.of("user1"), ListType.WHITELIST);
@@ -268,7 +271,7 @@ class FeatureToggleServiceTest {
         when(userRepository.deleteByFeatureAndUserIdInAndListType(testToggle, List.of("user1"), ListType.BLACKLIST)).thenReturn(1);
 
         // When
-        service.removeUsersFromBlacklist("TEST_FEATURE", List.of("user1"));
+        service.removeUsersFromBlacklist("TEST_FEATURE", List.of("user1"), "test-actor");
 
         // Then
         verify(userRepository).deleteByFeatureAndUserIdInAndListType(testToggle, List.of("user1"), ListType.BLACKLIST);
@@ -351,7 +354,7 @@ class FeatureToggleServiceTest {
         when(userRepository.existsByFeatureAndUserIdAndListType(testToggle, "user2", ListType.WHITELIST)).thenReturn(true);
 
         // When
-        service.addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"));
+        service.addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"), "test-actor");
 
         // Then
         verify(userRepository, never()).saveAll(anyList());

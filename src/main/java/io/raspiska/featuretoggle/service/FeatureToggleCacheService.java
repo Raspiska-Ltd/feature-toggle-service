@@ -33,18 +33,21 @@ public class FeatureToggleCacheService {
     private final FeatureToggleRepository toggleRepository;
     private final FeatureToggleUserRepository userRepository;
     private final ApplicationProperties properties;
+    private final MetricsService metricsService;
     private final boolean redisEnabled;
 
     public FeatureToggleCacheService(@Nullable RedisTemplate<String, Object> redisTemplate,
                                       @Nullable ChannelTopic featureToggleTopic,
                                       FeatureToggleRepository toggleRepository,
                                       FeatureToggleUserRepository userRepository,
-                                      ApplicationProperties properties) {
+                                      ApplicationProperties properties,
+                                      MetricsService metricsService) {
         this.redisTemplate = redisTemplate;
         this.featureToggleTopic = featureToggleTopic;
         this.toggleRepository = toggleRepository;
         this.userRepository = userRepository;
         this.properties = properties;
+        this.metricsService = metricsService;
         this.redisEnabled = redisTemplate != null && featureToggleTopic != null;
         
         if (!redisEnabled) {
@@ -53,18 +56,23 @@ public class FeatureToggleCacheService {
     }
 
     public FeatureCheckResponse checkFeature(String featureName, String userId) {
-        CachedToggle cached = getFromCache(featureName);
-        
-        if (cached == null) {
-            return FeatureCheckResponse.builder()
-                    .featureName(featureName)
-                    .enabled(false)
-                    .status(null)
-                    .reason("Feature not found")
-                    .build();
-        }
+        return metricsService.timeFeatureCheck(() -> {
+            CachedToggle cached = getFromCache(featureName);
+            
+            if (cached == null) {
+                metricsService.recordFeatureCheck(featureName, false);
+                return FeatureCheckResponse.builder()
+                        .featureName(featureName)
+                        .enabled(false)
+                        .status(null)
+                        .reason("Feature not found")
+                        .build();
+            }
 
-        return evaluateToggle(cached, userId);
+            FeatureCheckResponse response = evaluateToggle(cached, userId);
+            metricsService.recordFeatureCheck(featureName, response.isEnabled());
+            return response;
+        });
     }
 
     private FeatureCheckResponse evaluateToggle(CachedToggle cached, String userId) {
@@ -149,15 +157,18 @@ public class FeatureToggleCacheService {
     private CachedToggle getFromCache(String featureName) {
         CachedToggle localCached = localCache.get(featureName);
         if (localCached != null && !localCached.isExpired(properties.getCache().getTtlSeconds())) {
+            metricsService.recordCacheHit();
             return localCached;
         }
 
         CachedToggle redisCached = getFromRedis(featureName);
         if (redisCached != null) {
+            metricsService.recordCacheHit();
             localCache.put(featureName, redisCached);
             return redisCached;
         }
 
+        metricsService.recordCacheMiss();
         CachedToggle dbToggle = loadFromDatabase(featureName);
         if (dbToggle != null) {
             saveToRedis(dbToggle);

@@ -96,7 +96,7 @@ class FeatureToggleControllerTest {
                 .status(ToggleStatus.ENABLED)
                 .description("New feature")
                 .build();
-        when(toggleService.createToggle(any())).thenReturn(created);
+        when(toggleService.createToggle(any(), any())).thenReturn(created);
 
         // When/Then
         mockMvc.perform(post("/api/v1/toggles")
@@ -118,7 +118,7 @@ class FeatureToggleControllerTest {
                 .featureName("TEST_FEATURE")
                 .status(ToggleStatus.DISABLED)
                 .build();
-        when(toggleService.updateToggle(eq("TEST_FEATURE"), any())).thenReturn(updated);
+        when(toggleService.updateToggle(eq("TEST_FEATURE"), any(), any())).thenReturn(updated);
 
         // When/Then
         mockMvc.perform(put("/api/v1/toggles/TEST_FEATURE")
@@ -132,13 +132,13 @@ class FeatureToggleControllerTest {
     @DisplayName("DELETE /api/v1/toggles/{name} should delete toggle")
     void deleteToggle_shouldDeleteToggle() throws Exception {
         // Given
-        doNothing().when(toggleService).deleteToggle("TEST_FEATURE");
+        doNothing().when(toggleService).deleteToggle(eq("TEST_FEATURE"), any());
 
         // When/Then
         mockMvc.perform(delete("/api/v1/toggles/TEST_FEATURE"))
                 .andExpect(status().isNoContent());
 
-        verify(toggleService).deleteToggle("TEST_FEATURE");
+        verify(toggleService).deleteToggle(eq("TEST_FEATURE"), any());
     }
 
     @Test
@@ -186,7 +186,7 @@ class FeatureToggleControllerTest {
         UserListRequest request = new UserListRequest();
         request.setUserIds(List.of("user1", "user2"));
 
-        doNothing().when(toggleService).addUsersToWhitelist(eq("TEST_FEATURE"), anyList());
+        doNothing().when(toggleService).addUsersToWhitelist(eq("TEST_FEATURE"), anyList(), any());
 
         // When/Then
         mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/whitelist")
@@ -194,7 +194,7 @@ class FeatureToggleControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(toggleService).addUsersToWhitelist("TEST_FEATURE", List.of("user1", "user2"));
+        verify(toggleService).addUsersToWhitelist(eq("TEST_FEATURE"), eq(List.of("user1", "user2")), any());
     }
 
     @Test
@@ -204,7 +204,7 @@ class FeatureToggleControllerTest {
         UserListRequest request = new UserListRequest();
         request.setUserIds(List.of("user1"));
 
-        doNothing().when(toggleService).removeUsersFromWhitelist(eq("TEST_FEATURE"), anyList());
+        doNothing().when(toggleService).removeUsersFromWhitelist(eq("TEST_FEATURE"), anyList(), any());
 
         // When/Then
         mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/whitelist/remove")
@@ -212,7 +212,7 @@ class FeatureToggleControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(toggleService).removeUsersFromWhitelist("TEST_FEATURE", List.of("user1"));
+        verify(toggleService).removeUsersFromWhitelist(eq("TEST_FEATURE"), eq(List.of("user1")), any());
     }
 
     @Test
@@ -237,7 +237,7 @@ class FeatureToggleControllerTest {
         UserListRequest request = new UserListRequest();
         request.setUserIds(List.of("blocked1"));
 
-        doNothing().when(toggleService).addUsersToBlacklist(eq("TEST_FEATURE"), anyList());
+        doNothing().when(toggleService).addUsersToBlacklist(eq("TEST_FEATURE"), anyList(), any());
 
         // When/Then
         mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/blacklist")
@@ -245,7 +245,7 @@ class FeatureToggleControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(toggleService).addUsersToBlacklist("TEST_FEATURE", List.of("blocked1"));
+        verify(toggleService).addUsersToBlacklist(eq("TEST_FEATURE"), eq(List.of("blocked1")), any());
     }
 
     @Test
@@ -255,7 +255,7 @@ class FeatureToggleControllerTest {
         UserListRequest request = new UserListRequest();
         request.setUserIds(List.of("blocked1"));
 
-        doNothing().when(toggleService).removeUsersFromBlacklist(eq("TEST_FEATURE"), anyList());
+        doNothing().when(toggleService).removeUsersFromBlacklist(eq("TEST_FEATURE"), anyList(), any());
 
         // When/Then
         mockMvc.perform(post("/api/v1/toggles/TEST_FEATURE/blacklist/remove")
@@ -263,7 +263,7 @@ class FeatureToggleControllerTest {
                         .content(objectMapper.writeValueAsString(request)))
                 .andExpect(status().isOk());
 
-        verify(toggleService).removeUsersFromBlacklist("TEST_FEATURE", List.of("blocked1"));
+        verify(toggleService).removeUsersFromBlacklist(eq("TEST_FEATURE"), eq(List.of("blocked1")), any());
     }
 
     @Test
