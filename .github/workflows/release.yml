@@ -61,10 +61,11 @@ jobs:
 
       - name: Push Docker image to GHCR
         run: |
-          docker tag feature-toggle-service:${{ steps.version.outputs.VERSION }} ghcr.io/${{ github.repository_owner }}/feature-toggle-service:${{ steps.version.outputs.VERSION }}
-          docker tag feature-toggle-service:latest ghcr.io/${{ github.repository_owner }}/feature-toggle-service:latest
-          docker push ghcr.io/${{ github.repository_owner }}/feature-toggle-service:${{ steps.version.outputs.VERSION }}
-          docker push ghcr.io/${{ github.repository_owner }}/feature-toggle-service:latest
+          REPO_OWNER=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')
+          docker tag feature-toggle-service:${{ steps.version.outputs.VERSION }} ghcr.io/${REPO_OWNER}/feature-toggle-service:${{ steps.version.outputs.VERSION }}
+          docker tag feature-toggle-service:latest ghcr.io/${REPO_OWNER}/feature-toggle-service:latest
+          docker push ghcr.io/${REPO_OWNER}/feature-toggle-service:${{ steps.version.outputs.VERSION }}
+          docker push ghcr.io/${REPO_OWNER}/feature-toggle-service:latest
 
   publish-client:
     runs-on: ubuntu-latest
