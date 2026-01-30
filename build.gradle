@@ -45,10 +45,16 @@ dependencies {
     // Test
     testImplementation 'org.springframework.boot:spring-boot-starter-test'
     testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+    
+    // Performance testing
+    testImplementation 'org.openjdk.jmh:jmh-core:1.37'
+    testAnnotationProcessor 'org.openjdk.jmh:jmh-generator-annprocess:1.37'
 }
 
 tasks.named('test') {
-    useJUnitPlatform()
+    useJUnitPlatform {
+        excludeTags 'performance'
+    }
     finalizedBy jacocoTestReport
 }
 
@@ -88,3 +94,25 @@ jacocoTestCoverageVerification {
 tasks.named('check') {
     dependsOn jacocoTestCoverageVerification
 }
+
+tasks.register('performanceTest', Test) {
+    description = 'Runs performance and load tests'
+    group = 'verification'
+    
+    useJUnitPlatform {
+        includeTags 'performance'
+    }
+    
+    testLogging {
+        events 'passed', 'skipped', 'failed', 'standardOut'
+        showStandardStreams = true
+    }
+    
+    reports {
+        html.required = true
+        html.outputLocation = layout.buildDirectory.dir('reports/performance-tests')
+    }
+    
+    shouldRunAfter test
+}
+
